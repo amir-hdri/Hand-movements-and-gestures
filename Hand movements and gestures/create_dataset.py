@@ -1,57 +1,45 @@
-from __future__ import annotations
-
 import argparse
 import time
+import sys
 from pathlib import Path
 
+import cv2
+import mediapipe as mp
 import numpy as np
 
-from gesture_recognition.features import append_label, hand_landmarks_to_feature_vector
+# Ensure project root is in path
+sys.path.append(str(Path(__file__).resolve().parent))
 
+from gesture_recognition.config import GestureConfig
+from gesture_recognition.features import append_label, hand_landmarks_to_feature_vector
+from gesture_recognition.utils import setup_logging, open_camera
+
+logger = setup_logging(__name__)
 
 def parse_args() -> argparse.Namespace:
-    project_root = Path(__file__).resolve().parent
-
     parser = argparse.ArgumentParser(description="Collect hand gesture dataset from a webcam.")
-    parser.add_argument("--camera", type=int, default=0, help="Webcam index (default: 0)")
-    parser.add_argument(
-        "--actions",
-        nargs="+",
-        default=["come", "away", "spin"],
-        help="Action names (order becomes label indices)",
-    )
-    parser.add_argument("--seq-length", type=int, default=30, help="Sequence length (default: 30)")
-    parser.add_argument(
-        "--secs-for-action", type=int, default=30, help="Seconds to record per action (default: 30)"
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=project_root / "dataset",
-        help="Directory to write .npy files (default: ./dataset)",
-    )
+    parser.add_argument("--camera", type=int, default=0, help="Webcam index")
+    parser.add_argument("--actions", nargs="+", default=["come", "away", "spin"])
+    parser.add_argument("--seq-length", type=int, default=30)
+    parser.add_argument("--secs-for-action", type=int, default=30)
+    parser.add_argument("--output-dir", type=Path, default=Path("dataset"))
     return parser.parse_args()
 
-
-def main() -> int:
+def main():
     args = parse_args()
-    try:
-        import cv2
-        import mediapipe as mp
-    except ModuleNotFoundError as exc:  # pragma: no cover
-        raise SystemExit(
-            "Missing dependencies. Install: opencv-python, mediapipe, numpy"
-        ) from exc
 
+    config = GestureConfig(
+        camera_id=args.camera,
+        actions=args.actions,
+        seq_length=args.seq_length,
+        secs_for_action=args.secs_for_action,
+        dataset_output_dir=args.output_dir
+    )
+
+    config.dataset_output_dir.mkdir(parents=True, exist_ok=True)
     created_time = int(time.time())
-    args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.seq_length <= 0:
-        raise SystemExit("--seq-length must be > 0")
-    if args.secs_for_action <= 0:
-        raise SystemExit("--secs-for-action must be > 0")
-
-    # MediaPipe hands model
+    # MediaPipe
     mp_hands = mp.solutions.hands
     mp_drawing = mp.solutions.drawing_utils
     hands = mp_hands.Hands(
@@ -60,78 +48,90 @@ def main() -> int:
         min_tracking_confidence=0.5,
     )
 
-    cap = cv2.VideoCapture(args.camera)
-    if not cap.isOpened():
-        raise SystemExit(f"Could not open camera index {args.camera}")
-
-    should_stop = False
     try:
-        for label_index, action in enumerate(args.actions):
-            data: list[np.ndarray] = []
+        cap = open_camera(config.camera_id)
+    except Exception as e:
+        logger.error(f"Failed to open camera: {e}")
+        return
 
-            ret, img = cap.read()
-            if not ret:
-                print("Failed to read from camera.")
-                break
+    try:
+        logger.info("Starting dataset collection. Press 'q' to abort.")
 
-            img = cv2.flip(img, 1)
-            cv2.putText(
-                img,
-                f"Waiting for collecting {action.upper()} action...",
-                org=(10, 30),
-                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                fontScale=1,
-                color=(255, 255, 255),
-                thickness=2,
-            )
-            cv2.imshow("img", img)
-            cv2.waitKey(3000)
+        for label_index, action in enumerate(config.actions):
+            data = []
+
+            logger.info(f"Preparing to collect action: {action}")
+
+            # Countdown
+            start_wait = time.time()
+            while time.time() - start_wait < 3.0:
+                 ret, img = cap.read()
+                 if not ret:
+                     break
+
+                 img = cv2.flip(img, 1)
+                 cv2.putText(
+                    img,
+                    f"Collecting {action.upper()} in {3.0 - (time.time() - start_wait):.1f}s",
+                    org=(10, 30),
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                    fontScale=1,
+                    color=(255, 255, 255),
+                    thickness=2,
+                )
+                 cv2.imshow("Dataset Collection", img)
+                 if cv2.waitKey(1) & 0xFF == ord('q'):
+                     return
 
             start_time = time.time()
-            while time.time() - start_time < args.secs_for_action:
+            logger.info(f"Collecting {action}...")
+
+            while time.time() - start_time < config.secs_for_action:
                 ret, img = cap.read()
                 if not ret:
-                    print("Failed to read from camera.")
-                    should_stop = True
                     break
 
                 img = cv2.flip(img, 1)
                 rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 result = hands.process(rgb)
 
-                if result.multi_hand_landmarks is not None:
+                if result.multi_hand_landmarks:
                     for res in result.multi_hand_landmarks:
                         fv = hand_landmarks_to_feature_vector(res)
                         data.append(append_label(fv, label_index))
                         mp_drawing.draw_landmarks(img, res, mp_hands.HAND_CONNECTIONS)
 
-                cv2.imshow("img", img)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord("q"):
-                    should_stop = True
-                    break
+                cv2.imshow("Dataset Collection", img)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    return
 
             data_arr = np.asarray(data, dtype=np.float32)
-            print(action, data_arr.shape)
-            np.save(args.output_dir / f"raw_{action}_{created_time}.npy", data_arr)
+            logger.info(f"Collected {action}: {data_arr.shape}")
 
-            # Create sequence data (includes label in the last column).
+            if len(data_arr) == 0:
+                logger.warning(f"No data collected for {action}!")
+                continue
+
+            np.save(config.dataset_output_dir / f"raw_{action}_{created_time}.npy", data_arr)
+
+            # Create sequence data
             full_seq_data = []
-            for start in range(0, len(data_arr) - args.seq_length + 1):
-                full_seq_data.append(data_arr[start : start + args.seq_length])
+            if len(data_arr) >= config.seq_length:
+                for start in range(0, len(data_arr) - config.seq_length + 1):
+                    full_seq_data.append(data_arr[start : start + config.seq_length])
 
-            full_seq_arr = np.asarray(full_seq_data, dtype=np.float32)
-            print(action, full_seq_arr.shape)
-            np.save(args.output_dir / f"seq_{action}_{created_time}.npy", full_seq_arr)
+                full_seq_arr = np.asarray(full_seq_data, dtype=np.float32)
+                logger.info(f"Sequence data {action}: {full_seq_arr.shape}")
+                np.save(config.dataset_output_dir / f"seq_{action}_{created_time}.npy", full_seq_arr)
+            else:
+                logger.warning(f"Not enough data for sequence length {config.seq_length}")
 
-            if should_stop:
-                break
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user.")
     finally:
         cap.release()
         cv2.destroyAllWindows()
-
-    return 0
-
+        hands.close()
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
