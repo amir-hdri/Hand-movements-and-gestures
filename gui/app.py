@@ -286,16 +286,16 @@ class GestureApp(tk.Tk):
             # Convert to RGB for display
             rgb_frame = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(rgb_frame)
-            imgtk = ImageTk.PhotoImage(image=img)
+            # DO NOT CREATE ImageTk here
 
             try:
-                # Put in queue for main thread (dropping old frames if full)
+                # Put PIL Image in queue for main thread (dropping old frames if full)
                 if self.video_queue.full():
                     try:
                         self.video_queue.get_nowait()
                     except queue.Empty:
                         pass
-                self.video_queue.put(imgtk)
+                self.video_queue.put(img)
             except:
                 pass
 
@@ -308,10 +308,13 @@ class GestureApp(tk.Tk):
     def update_ui(self):
         # Update video
         try:
-            imgtk = self.video_queue.get_nowait()
+            img = self.video_queue.get_nowait()
 
             if not self.is_running:
                 return
+
+            # Create ImageTk on Main Thread
+            imgtk = ImageTk.PhotoImage(image=img)
 
             try:
                 current_tab_idx = self.notebook.index(self.notebook.select())
