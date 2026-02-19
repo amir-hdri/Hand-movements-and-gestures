@@ -1,25 +1,22 @@
-# NOTE: This project currently relies on the TensorFlow/Keras 2.x ecosystem.
-# Newer environments often pull NumPy 2.x and Keras 3.x, which break the shipped
-# `.h5` model and/or compiled wheels (MediaPipe / TensorFlow).
+# Adapted for Python 3.12 environment
+# NumPy 1.26+ is required for Python 3.12, but we stay <2.0 to avoid breaking changes if possible.
+numpy>=1.26.0,<2.0
+opencv-contrib-python
+mediapipe
+attrs
 
-# ---- Core runtime (known-good) ----
-numpy==1.24.3
-opencv-contrib-python==4.8.1.78
-mediapipe==0.10.14
-attrs==25.4.0
+# Matplotlib
+matplotlib
+contourpy
 
-# Matplotlib is a transitive dependency of mediapipe; pin to a NumPy 1.x-compatible version.
-matplotlib==3.7.5
-contourpy==1.1.1
+# TensorFlow
+# For Python 3.12, we likely need TF 2.16+.
+# This might bring Keras 3. We will handle model loading issues if they arise.
+tensorflow
 
-# ---- TensorFlow / Keras (model inference) ----
-# TensorFlow 2.13 is compatible with the pretrained model shipped in ./models.
-tensorflow==2.13.0
-keras==2.13.1
+# Training
+scipy
+scikit-learn
 
-# ---- Training (optional; used in train.ipynb) ----
-scipy==1.10.1
-scikit-learn==1.3.2
-
-# ---- PingPong robot integration (optional) ----
-pyserial==3.5
+# PingPong
+pyserial
