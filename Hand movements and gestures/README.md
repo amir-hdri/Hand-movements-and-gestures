@@ -35,6 +35,33 @@ pip install -r requirements.txt
 
 ## Run
 
+### GUI Dashboard (Recommended)
+
+The project now includes a modern React-based GUI for data collection, training, and inference.
+
+1. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Build Frontend**:
+   You must build the React frontend before running the application.
+   ```bash
+   cd gesture_recognition/gui/frontend
+   npm install
+   npm run build
+   cd ../../../
+   ```
+
+3. **Run the Application**:
+   ```bash
+   python3 run_gui.py
+   ```
+
+   Open your browser at [http://localhost:8000](http://localhost:8000).
+
+### Legacy Scripts (CLI)
+
 ```bash
 python3 create_dataset.py --help
 python3 test.py --help
