@@ -6,12 +6,14 @@ import time
 from pathlib import Path
 
 import numpy as np
+import tensorflow as tf
 
 from gesture_recognition.features import hand_landmarks_to_feature_vector
 from gesture_recognition.recognizer import GestureRecognizer
 
 
-DEFAULT_ACTIONS = ["come", "away", "spin"]
+# Default to 2 actions to match the shipped model.h5
+DEFAULT_ACTIONS = ["come", "away"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,8 +23,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         type=Path,
-        default=project_root / "models" / "model2_1.0.h5",
-        help="Path to a Keras .h5 model (default: ./models/model2_1.0.h5)",
+        default=project_root / "models" / "model.h5",
+        help="Path to a Keras .h5 model (default: ./models/model.h5)",
     )
     parser.add_argument(
         "--source",
@@ -69,7 +71,6 @@ def main() -> int:
     try:
         import cv2
         import mediapipe as mp
-        import tensorflow as tf
     except ModuleNotFoundError as exc:  # pragma: no cover
         raise SystemExit(
             "Missing dependencies. Install: opencv-python, mediapipe, tensorflow, numpy"
@@ -81,10 +82,21 @@ def main() -> int:
         raise SystemExit("--stable-count must be > 0")
 
     if not args.model.exists():
-        raise SystemExit(f"Model file not found: {args.model}")
+        # Fallback to model2_1.0.h5 if model.h5 doesn't exist (though strictly model.h5 is preferred)
+        legacy_model = args.model.parent / "model2_1.0.h5"
+        if args.model.name == "model.h5" and legacy_model.exists():
+             print(f"Warning: model.h5 not found, falling back to {legacy_model}")
+             args.model = legacy_model
+             # If falling back, we might need to adjust actions if they differ, but we can't know for sure.
+        else:
+            raise SystemExit(f"Model file not found: {args.model}")
 
-    # Load model (compile not needed for inference)
-    model = tf.keras.models.load_model(args.model, compile=False)
+    # Load model
+    try:
+        model = tf.keras.models.load_model(args.model, compile=False)
+    except Exception as e:
+        raise SystemExit(f"Failed to load model: {e}")
+
     recognizer = GestureRecognizer(
         model,
         args.actions,
