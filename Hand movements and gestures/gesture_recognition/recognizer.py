@@ -31,7 +31,15 @@ class GestureRecognizer:
         if stable_count <= 0:
             raise ValueError("stable_count must be > 0")
 
-        self._model = model
+        try:
+            import tensorflow as tf
+            # For massive performance gains in TF 2.x on single samples, we can
+            # trace the Keras model execution graph.
+            self._model = tf.function(model, reduce_retracing=True)
+        except (ImportError, TypeError, ValueError, AttributeError):
+            # Fallback if model is not compatible with tf.function or tf is missing
+            self._model = model
+
         self._actions = list(actions)
         self._seq_length = int(seq_length)
         self._threshold = float(threshold)
@@ -56,10 +64,14 @@ class GestureRecognizer:
             np.asarray(list(self._seq)[-self._seq_length :], dtype=np.float32), axis=0
         )
 
-        try:
-            y_pred = self._model.predict(input_data, verbose=0).squeeze()
-        except TypeError:
-            y_pred = self._model.predict(input_data).squeeze()
+        # For single samples, invoking __call__ directly (or the tf.function wrapper)
+        # avoids the massive batching overhead of .predict()
+        y_pred = self._model(input_data, training=False)
+
+        # Convert tensor to numpy and squeeze batch dimension
+        if hasattr(y_pred, "numpy"):
+            y_pred = y_pred.numpy()
+        y_pred = np.asarray(y_pred).squeeze()
 
         if y_pred.ndim != 1 or y_pred.size != len(self._actions):
             raise ValueError(
