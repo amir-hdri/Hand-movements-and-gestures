@@ -36,9 +36,9 @@ class CubeOperationUtils():
             if method.lower() == "periodic":
                 if cube_ID == 0xFF:
                     for i in range(connection_number):
-                        set_robot_status(group_id, "controller_status", "get_sensor_mode[{}]".format(i), "\"periodic\"")
+                        set_robot_status(group_id, "controller_status", "get_sensor_mode[{}]".format(i), "periodic")
                 else:
-                    set_robot_status(group_id, "controller_status", "get_sensor_mode[{}]".format(cube_ID), "\"periodic\"")
+                    set_robot_status(group_id, "controller_status", "get_sensor_mode[{}]".format(cube_ID), "periodic")
             elif method.lower() == "oneshot": 
                 if cube_ID == 0xFF:
                     prev_mode = get_robot_status(group_id, "controller_status", "get_sensor_mode")
@@ -46,7 +46,7 @@ class CubeOperationUtils():
                     for i in range(connection_number):
                         if prev_mode[i] == "periodic":
                             periodic_flag = True
-                        set_robot_status(group_id, "controller_status", "get_sensor_mode[{}]".format(i), "\"oneshot\"")
+                        set_robot_status(group_id, "controller_status", "get_sensor_mode[{}]".format(i), "oneshot")
                     if periodic_flag:
                         print("Warning. All periodic get_sensor in group ID will be stop.")
                 else:
@@ -54,7 +54,7 @@ class CubeOperationUtils():
                     if prev_mode == "periodic":
                         raise ValueError("Cannot set get_sensor mode as \"oneshot\", if the current get_sensor mode is \"periodic\".")
                     else:
-                        set_robot_status(group_id, "controller_status", "get_sensor_mode[{}]".format(cube_ID), "\"oneshot\"")
+                        set_robot_status(group_id, "controller_status", "get_sensor_mode[{}]".format(cube_ID), "oneshot")
             else: # method.lower() == "stop"
                 if cube_ID == 0xFF:
                     prev_mode = get_robot_status(group_id, "controller_status", "get_sensor_mode")
@@ -62,7 +62,7 @@ class CubeOperationUtils():
                     for i in range(connection_number):
                         if prev_mode[i] != "periodic":
                             not_periodic_flag = True
-                        set_robot_status(group_id, "controller_status", "get_sensor_mode[{}]".format(i), "\"oneshot\"")
+                        set_robot_status(group_id, "controller_status", "get_sensor_mode[{}]".format(i), "oneshot")
                     if not_periodic_flag:
                         print("Warning. All cube will give sensor data.")
                 else:
@@ -70,7 +70,7 @@ class CubeOperationUtils():
                     if prev_mode != "periodic":
                         raise ValueError("Cannot set get_sensor mode as \"stop\", if the current get_sensor mode is not \"periodic\".")
                     else:
-                        set_robot_status(group_id, "controller_status", "get_sensor_mode[{}]".format(cube_ID), "\"oneshot\"")
+                        set_robot_status(group_id, "controller_status", "get_sensor_mode[{}]".format(cube_ID), "oneshot")
 
     def process_period(self, method, period):
         if method.lower() == "periodic":

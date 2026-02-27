@@ -1,6 +1,7 @@
 from protocols.generateprotocol import GenerateProtocol
 from operations.cube.cubeoperationutils import CubeOperationUtils
 import time
+import re
 
 class CubeOperation():
     def __init__(self, number, group_id, robot_status, start_check, write):
@@ -11,11 +12,24 @@ class CubeOperation():
 
     ### robot_status 얻기
     def _get_robot_status(self, group_id, status, variable):
-        return eval("self._robot_status[{}].{}.{}".format(group_id, status, variable))
+        obj = self._robot_status[group_id]
+        obj = getattr(obj, status)
+        match = re.match(r"(\w+)\[(\d+)\]", variable)
+        if match:
+            attr_name, index = match.groups()
+            return getattr(obj, attr_name)[int(index)]
+        return getattr(obj, variable)
 
     ### robot_status 설정
     def _set_robot_status(self, group_id, status, variable, value):
-        exec("self._robot_status[{}].{}.{} = {}".format(group_id, status, variable, value))
+        obj = self._robot_status[group_id]
+        obj = getattr(obj, status)
+        match = re.match(r"(\w+)\[(\d+)\]", variable)
+        if match:
+            attr_name, index = match.groups()
+            getattr(obj, attr_name)[int(index)] = value
+        else:
+            setattr(obj, variable, value)
 
     ### 센서 데이터 얻기
     def receive_sensor_data(self, cube_ID, method, period=1, group_id=None):
