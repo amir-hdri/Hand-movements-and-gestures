@@ -1,6 +1,7 @@
 from protocols.generateprotocol import GenerateProtocol
 from operations.ledmatrix.ledmatrixoperationutils import LEDMatrixOperationUtils
 import time
+import re
 
 class LEDMatrixOperation():
     def __init__(self, number, group_id, robot_status, start_check, write):
@@ -11,11 +12,24 @@ class LEDMatrixOperation():
 
     ### robot_status 얻기
     def _get_robot_status(self, group_id, status, variable):
-        return eval("self._robot_status[{}].{}.{}".format(group_id, status, variable))
+        obj = self._robot_status[group_id]
+        obj = getattr(obj, status)
+        match = re.match(r"(\w+)\[(\d+)\]", variable)
+        if match:
+            attr_name, index = match.groups()
+            return getattr(obj, attr_name)[int(index)]
+        return getattr(obj, variable)
 
     ### robot_status 설정
     def _set_robot_status(self, group_id, status, variable, value):
-        exec("self._robot_status[{}].{}.{} = {}".format(group_id, status, variable, value))
+        obj = self._robot_status[group_id]
+        obj = getattr(obj, status)
+        match = re.match(r"(\w+)\[(\d+)\]", variable)
+        if match:
+            attr_name, index = match.groups()
+            getattr(obj, attr_name)[int(index)] = value
+        else:
+            setattr(obj, variable, value)
 
     ### pixel 쓰기
     def LED_matrix_write_pixel(self, cube_ID, x_coordinate, y_coordinate, onoff=True, group_id=None):
