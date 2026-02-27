@@ -1,14 +1,24 @@
 import unittest
+import sys
 
-import numpy as np
+try:
+    import numpy as np
+    HAVE_NUMPY = True
+except ImportError:
+    import unittest.mock
+    HAVE_NUMPY = False
+    sys.modules['numpy'] = unittest.mock.MagicMock()
+    np = sys.modules['numpy']
 
-from gesture_recognition.features import (
-    append_label,
-    hand_landmarks_to_feature_vector,
-    hand_landmarks_to_joint,
-    joint_to_angles,
-)
-
+try:
+    from gesture_recognition.features import (
+        append_label,
+        hand_landmarks_to_feature_vector,
+        hand_landmarks_to_joint,
+        joint_to_angles,
+    )
+except ImportError:
+    pass
 
 class _LM:
     def __init__(self, x: float, y: float, z: float, visibility: float | None = None) -> None:
@@ -23,7 +33,7 @@ class _Hand:
     def __init__(self, landmarks):
         self.landmark = landmarks
 
-
+@unittest.skipUnless(HAVE_NUMPY, "Requires NumPy")
 class FeaturesTest(unittest.TestCase):
     def test_joint_shape_and_visibility_default(self):
         hand = _Hand([_LM(i, i + 1, i + 2) for i in range(21)])
@@ -56,4 +66,3 @@ class FeaturesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

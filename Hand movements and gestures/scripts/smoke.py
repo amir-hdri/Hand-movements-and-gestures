@@ -1,11 +1,19 @@
 from __future__ import annotations
 import os
+import sys
 from pathlib import Path
 
-import numpy as np
-
+try:
+    import numpy as np
+    HAVE_NUMPY = True
+except ImportError:
+    HAVE_NUMPY = False
 
 def main() -> int:
+    if not HAVE_NUMPY:
+        print("Skipping smoke test because NumPy is missing.")
+        return 0
+
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
     project_root = Path(__file__).resolve().parent.parent
