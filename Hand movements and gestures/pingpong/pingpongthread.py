@@ -6,7 +6,6 @@ from connection.utils import Utils
 from connection.rawprotocol import rawProtocol
 from protocols.generateprotocol import GenerateProtocol
 from operations.operationderived import OperationDerived
-# from ai.aiderived import AiDerived
 from robotstatus import RobotStatus
 import time
 
@@ -34,7 +33,6 @@ class PingPongThread(ReaderThread, OperationDerived, metaclass=SingletonMeta):
             raise ValueError("PingPong robot can connect only with 1 to 8 robots.")
         self._GenerateProtocolInstance = GenerateProtocol(number, group_id) # GenrateProtocol instance 생성
         OperationDerived.__init__(self, number, group_id, self._robot_status, self._start_check, self._write) # MotorOperation 초기화
-        # AiDerived.__init__(self, tensorflow_no_warnings) # AI 클래스 초기화
         self.PORT = ConnectionUtils.find_bluetooth_dongle(self._GenerateProtocolInstance.DongleInAction_bytes()) # 동글 포트 찾기
         self._play_once_dict = {group_id: True}
 
