@@ -116,11 +116,16 @@ def main() -> int:
             np.save(args.output_dir / f"raw_{action}_{created_time}.npy", data_arr)
 
             # Create sequence data (includes label in the last column).
-            full_seq_data = []
-            for start in range(0, len(data_arr) - args.seq_length + 1):
-                full_seq_data.append(data_arr[start : start + args.seq_length])
-
-            full_seq_arr = np.asarray(full_seq_data, dtype=np.float32)
+            if len(data_arr) >= args.seq_length:
+                full_seq_arr = (
+                    np.lib.stride_tricks.sliding_window_view(
+                        data_arr, (args.seq_length, data_arr.shape[1])
+                    )
+                    .squeeze(axis=1)
+                    .astype(np.float32)
+                )
+            else:
+                full_seq_arr = np.asarray([], dtype=np.float32)
             print(action, full_seq_arr.shape)
             np.save(args.output_dir / f"seq_{action}_{created_time}.npy", full_seq_arr)
 
