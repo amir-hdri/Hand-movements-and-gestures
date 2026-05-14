@@ -38,12 +38,13 @@ class DataCollector:
         self.frame_count = 0
 
     def start_recording(self, action_name):
-        self.is_recording = True
-        self.current_action = action_name
-        self.recorded_data = []
-        self.start_time = time.time()
-        self.frame_count = 0
-        print(f"Started recording action: {action_name}")
+        if not self.is_recording:
+            self.is_recording = True
+            self.current_action = action_name
+            self.recorded_data = []
+            self.start_time = time.time()
+            self.frame_count = 0
+            print(f"Started recording action: {action_name}")
 
     def stop_recording(self):
         if not self.is_recording:
