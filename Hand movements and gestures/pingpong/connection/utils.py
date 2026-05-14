@@ -10,20 +10,17 @@ class Utils():
         for i in range(int(len(str(bytesinput.hex()))/2-1)):
             stroutput = insert_str(stroutput, " ", 3*i+2)
         stroutput = stroutput.upper()
-        return stroutput
-
-    # 실수 체크
+        return stroutput    # 실수 체크
     @staticmethod
-    def float_check(number, option=None) -> None:
-        if not isinstance(number, (int, float)):
-            is_float = False
-        else:
-            is_float = True
-        if not is_float:
-            if option:
-                raise ValueError("Please enter float number, or \"" + str(option) + "\"!")
-            else:
-                raise ValueError("Please enter float number!")
+    def float_check(value, min_val, max_val):
+        if type(value) != float and type(value) != int:
+            return -1
+        if value < min_val:
+            return min_val
+        if value > max_val:
+            return max_val
+        return float(value)
+
 
     #  정수 체크
     @staticmethod
