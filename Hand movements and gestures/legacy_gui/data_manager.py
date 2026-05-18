@@ -108,11 +108,13 @@ class DataCollector:
         # Create sequences (seq_length=30)
         seq_length = 30
         if len(data_arr) >= seq_length:
-            sequences = []
-            for i in range(len(data_arr) - seq_length + 1):
-                sequences.append(data_arr[i : i + seq_length])
-
-            seq_arr = np.array(sequences, dtype=np.float32)
+            seq_arr = (
+                np.lib.stride_tricks.sliding_window_view(
+                    data_arr, (seq_length, data_arr.shape[1])
+                )
+                .squeeze(axis=1)
+                .astype(np.float32)
+            )
             seq_filename = self.output_dir / f"seq_{self.current_action}_{timestamp}.npy"
             np.save(seq_filename, seq_arr)
             print(f"Saved sequences to {seq_filename} shape={seq_arr.shape}")
