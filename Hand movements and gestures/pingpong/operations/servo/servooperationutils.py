@@ -613,7 +613,7 @@ class ServoOperationUtilsConvert():
                 input_list_copy[i] *= run_number
         ### 리스트 붙이기 (return은 cube_ID_list와 input_list의 원소 리스트들)
         out_list = []
-        out_list += [cube_ID_list]
+        out_list.append(cube_ID_list)
         out_list += input_list_copy
         return tuple(out_list)
 
