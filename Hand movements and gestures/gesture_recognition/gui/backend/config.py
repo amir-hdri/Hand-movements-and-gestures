@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Dict
@@ -30,6 +31,14 @@ class GestureConfig:
 
     # Initial gestures (matching model.h5 output shape which is 2)
     ACTIONS: List[str] = field(default_factory=lambda: ["come", "away"])
+
+    # CORS configuration
+    CORS_ALLOWED_ORIGINS: List[str] = field(default_factory=lambda: [
+        origin.strip() for origin in os.getenv(
+            "CORS_ALLOWED_ORIGINS",
+            "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000"
+        ).split(",") if origin.strip()
+    ])
 
     def get_threshold(self, action: str) -> float:
         return self.SMART_THRESHOLDS.get(action, self.DEFAULT_THRESHOLD)
