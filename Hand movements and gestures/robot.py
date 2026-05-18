@@ -6,8 +6,6 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
-
 from gesture_recognition.features import hand_landmarks_to_feature_vector
 from gesture_recognition.recognizer import GestureRecognizer
 
