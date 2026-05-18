@@ -188,7 +188,7 @@ camera_thread.daemon = True
 camera_thread.start()
 
 # Video Stream Generator
-def generate_frames():
+async def generate_frames():
     while True:
         with state.lock:
             frame = state.latest_frame
@@ -197,9 +197,9 @@ def generate_frames():
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
         else:
-            time.sleep(0.1)
+            await asyncio.sleep(0.1)
 
-        time.sleep(0.03)
+        await asyncio.sleep(0.03)
 
 # Pydantic Models
 class RecordRequest(BaseModel):
