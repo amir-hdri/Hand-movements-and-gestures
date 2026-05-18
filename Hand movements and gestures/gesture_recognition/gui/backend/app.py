@@ -1,12 +1,11 @@
 import cv2
 import threading
 import time
-import asyncio
-from typing import List, Dict, Optional
+from typing import Dict
 from pathlib import Path
 
 from fastapi import FastAPI, BackgroundTasks, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
