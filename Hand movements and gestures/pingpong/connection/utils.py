@@ -41,7 +41,7 @@ class Utils():
     # 2바이트 헥스 리스트를 integer로 변환
     @staticmethod
     def twobyte_hexlist_to_int(byte1, byte2) -> int:
-        return int(hex(byte1)[2:] + hex(byte2)[2:], 16)
+        return (byte1 << 8) | byte2
     
     # 리스트로 변환
     @staticmethod
