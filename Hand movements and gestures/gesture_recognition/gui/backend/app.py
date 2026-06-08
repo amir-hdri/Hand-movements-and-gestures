@@ -1,11 +1,13 @@
 import cv2
 import threading
 import time
-from typing import Dict
+import asyncio
+from typing import Dict, List, Optional
 from pathlib import Path
+from datetime import datetime
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -42,10 +44,34 @@ class AppState:
         self.training_status = "idle"
         self.last_prediction = {"action": None, "confidence": 0.0}
         self.latest_frame = None
+        self.prediction_history = []
+        self.history_lock = threading.Lock()
         self.lock = threading.Lock()
 
         # Load model initially
         self.reload_model()
+
+    def add_prediction_to_history(self, action, confidence):
+        """Add a prediction to the history, keeping only the last 100 entries"""
+        with self.history_lock:
+            self.prediction_history.append({
+                "action": action,
+                "confidence": confidence,
+                "timestamp": datetime.now().isoformat()
+            })
+            # Keep only last 100 predictions
+            if len(self.prediction_history) > 100:
+                self.prediction_history = self.prediction_history[-100:]
+
+    def get_prediction_history(self):
+        """Get a copy of the prediction history"""
+        with self.history_lock:
+            return list(self.prediction_history)
+
+    def clear_prediction_history(self):
+        """Clear the prediction history"""
+        with self.history_lock:
+            self.prediction_history = []
 
     def reload_model(self):
         actions = self.data_manager.get_available_gestures()
@@ -164,8 +190,12 @@ class CameraThread(threading.Thread):
                             label_text = f"STABLE: {pred.stable_action}"
                             color = (255, 0, 0)
                             state.last_prediction = {"action": pred.stable_action, "confidence": pred.confidence}
+                            # Add to history
+                            state.add_prediction_to_history(pred.stable_action, pred.confidence)
                         else:
                             state.last_prediction = {"action": pred.raw_action, "confidence": pred.confidence}
+                            # Add to history
+                            state.add_prediction_to_history(pred.raw_action, pred.confidence)
 
                         cv2.putText(annotated_frame, label_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
                     else:
@@ -280,6 +310,44 @@ async def get_gestures():
 async def add_gesture(req: AddGestureRequest):
     state.data_manager.add_gesture(req.label)
     return {"status": "added", "label": req.label}
+
+@app.delete("/api/gestures")
+async def delete_gesture(req: AddGestureRequest):
+    try:
+        state.data_manager.remove_gesture(req.label)
+        # Reload model with updated gestures
+        state.reload_model()
+        return {"status": "deleted", "label": req.label}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Prediction History Endpoints
+@app.get("/api/history")
+async def get_history():
+    return {"history": state.get_prediction_history()}
+
+@app.delete("/api/history")
+async def clear_history():
+    state.clear_prediction_history()
+    return {"status": "cleared"}
+
+# Dataset Management Endpoints
+@app.post("/api/dataset/export")
+async def export_dataset():
+    try:
+        export_path = state.data_manager.export_dataset()
+        return {"status": "exported", "path": str(export_path)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/dataset/reset")
+async def reset_dataset():
+    try:
+        state.data_manager.reset_dataset()
+        state.reload_model()
+        return {"status": "reset"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/config")
 async def get_config():

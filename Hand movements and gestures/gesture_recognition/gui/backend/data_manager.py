@@ -123,3 +123,59 @@ class DataManager:
 
     def add_gesture(self, label: str):
         self.label_manager.add_label(label)
+
+    def remove_gesture(self, label: str):
+        """Remove a gesture and all its associated data files"""
+        with self._lock:
+            if label in self.label_manager.get_labels():
+                self.label_manager.labels.remove(label)
+                self.label_manager.save_labels()
+
+            # Remove data files for this label
+            import re
+            for npy_file in config.DATASET_DIR.glob("*.npy"):
+                if label in str(npy_file):
+                    npy_file.unlink()
+                    print(f"Deleted data file: {npy_file}")
+
+    def export_dataset(self) -> Path:
+        """Export the dataset to a timestamped zip file"""
+        import zipfile
+        import shutil
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        export_dir = config.DATASET_DIR.parent / f"dataset_export_{timestamp}"
+        export_zip = export_dir.with_suffix(".zip")
+
+        # Create export directory
+        export_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy dataset
+        shutil.copytree(config.DATASET_DIR, export_dir / "dataset")
+
+        # Create zip
+        with zipfile.ZipFile(export_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in (export_dir / "dataset").rglob("*"):
+                if file_path.is_file():
+                    zipf.write(file_path.resolve(), file_path.relative_to(export_dir / "dataset"))
+
+        # Clean up
+        shutil.rmtree(export_dir)
+
+        print(f"Dataset exported to: {export_zip}")
+        return export_zip
+
+    def reset_dataset(self):
+        """Clear all recorded data but keep gesture labels"""
+        with self._lock:
+            if not self.recording:
+                # Remove all .npy files
+                for npy_file in config.DATASET_DIR.glob("*.npy"):
+                    npy_file.unlink()
+                    print(f"Deleted: {npy_file}")
+                
+                # Keep labels.json
+                print("Dataset reset. All data files removed.")
+            else:
+                raise RuntimeError("Cannot reset dataset while recording")

@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock
 
 import numpy as np
 
@@ -48,7 +48,9 @@ class RecognizerTest(unittest.TestCase):
 
         # Mock prediction returning array of shape (1, 3) where max is 0.7
         mock_pred = np.array([[0.1, 0.7, 0.2]], dtype=np.float32)
-        self.mock_model.predict.return_value = mock_pred
+        # Replace _model with a mock that returns the prediction directly
+        # (the recognizer calls _model(input, training=False), not model.predict())
+        self.recognizer._model = MagicMock(return_value=mock_pred)
 
         # Feed enough to trigger prediction
         for _ in range(self.seq_length):
@@ -63,7 +65,8 @@ class RecognizerTest(unittest.TestCase):
 
         # Mock prediction returning max confidence > threshold for "action2"
         mock_pred = np.array([[0.1, 0.9, 0.0]], dtype=np.float32)
-        self.mock_model.predict.return_value = mock_pred
+        # Replace _model with a mock that returns the prediction directly
+        self.recognizer._model = MagicMock(return_value=mock_pred)
 
         # First seq_length-1 inputs: no prediction
         for _ in range(self.seq_length - 1):
@@ -92,7 +95,8 @@ class RecognizerTest(unittest.TestCase):
 
         # Model returns mismatched action count (4 instead of 3)
         mock_pred = np.array([[0.1, 0.2, 0.3, 0.4]], dtype=np.float32)
-        self.mock_model.predict.return_value = mock_pred
+        # Replace _model with a mock that returns the prediction directly
+        self.recognizer._model = MagicMock(return_value=mock_pred)
 
         # Fill sequence length - 1
         for _ in range(self.seq_length - 1):
@@ -106,12 +110,14 @@ class RecognizerTest(unittest.TestCase):
     def test_update_typeerror_fallback_verbose(self):
         feature_vector = np.zeros(99, dtype=np.float32)
 
-        def mock_predict(*args, **kwargs):
+        # Create a mock that raises TypeError for verbose kwarg
+        def mock_model_call(*args, **kwargs):
             if 'verbose' in kwargs:
                 raise TypeError("predict() got an unexpected keyword argument 'verbose'")
             return np.array([[0.1, 0.85, 0.05]], dtype=np.float32)
 
-        self.mock_model.predict.side_effect = mock_predict
+        # Replace _model with a mock that handles the verbose kwarg issue
+        self.recognizer._model = MagicMock(side_effect=mock_model_call)
 
         # Fill up sequence to trigger prediction
         for _ in range(self.seq_length):

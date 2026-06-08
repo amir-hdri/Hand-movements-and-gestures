@@ -1,12 +1,24 @@
 # Environment: Windows x64, Python x64 3.6.6
 
-from connection.serialprotocol import ReaderThread
-from connection.connectionutils import ConnectionUtils
-from connection.utils import Utils
-from connection.rawprotocol import rawProtocol
-from protocols.generateprotocol import GenerateProtocol
-from operations.operationderived import OperationDerived
-from robotstatus import RobotStatus
+# Support both flat imports (for backwards compatibility) and package imports
+try:
+    from connection.serialprotocol import ReaderThread
+    from connection.connectionutils import ConnectionUtils
+    from connection.utils import Utils
+    from connection.rawprotocol import rawProtocol
+    from protocols.generateprotocol import GenerateProtocol
+    from operations.operationderived import OperationDerived
+    from robotstatus import RobotStatus
+except ModuleNotFoundError:
+    # Use package-relative imports if flat imports fail
+    from .connection.serialprotocol import ReaderThread
+    from .connection.connectionutils import ConnectionUtils
+    from .connection.utils import Utils
+    from .connection.rawprotocol import rawProtocol
+    from .protocols.generateprotocol import GenerateProtocol
+    from .operations.operationderived import OperationDerived
+    from .robotstatus import RobotStatus
+
 import time
 
 class SingletonMeta(type):

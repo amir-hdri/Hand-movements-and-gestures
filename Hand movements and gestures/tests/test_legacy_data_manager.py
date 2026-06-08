@@ -1,27 +1,32 @@
 import unittest
 from unittest.mock import patch, MagicMock
-
-# We need to mock cv2, mediapipe, and numpy to avoid needing them installed
 import sys
-
-cv2_mock = MagicMock()
-mp_mock = MagicMock()
-np_mock = MagicMock()
-
-sys.modules['cv2'] = cv2_mock
-sys.modules['mediapipe'] = mp_mock
-sys.modules['numpy'] = np_mock
-
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from legacy_gui.data_manager import DataCollector
 import time
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 class TestLegacyDataCollector(unittest.TestCase):
     def setUp(self):
+        # Create mocks for the required modules
+        cv2_mock = MagicMock()
+        np_mock = MagicMock()
+        mp_mock = MagicMock()
+        mp_mock.solutions = MagicMock()
+        mp_mock.solutions.hands = MagicMock()
+        mp_mock.solutions.hands.Hands = MagicMock()
+        
+        # Import under the patched sys.modules
+        with patch.dict('sys.modules', {
+            'cv2': cv2_mock,
+            'mediapipe': mp_mock,
+            'numpy': np_mock
+        }):
+            from legacy_gui.data_manager import DataCollector
+            self.DataCollector = DataCollector
+        
         self.output_dir = "test_dataset"
-        self.collector = DataCollector(output_dir=self.output_dir)
+        self.collector = self.DataCollector(output_dir=self.output_dir)
 
     def test_start_recording_not_recording(self):
         """Test starting recording when not currently recording."""

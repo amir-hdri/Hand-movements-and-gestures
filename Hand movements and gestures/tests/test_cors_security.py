@@ -3,13 +3,13 @@ import os
 import sys
 from pathlib import Path
 from importlib import reload
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 # Add project root to sys.path
 project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
-# Mock heavy dependencies
+# Mock heavy dependencies - these will be applied during test setUp
 mock_modules = [
     'numpy',
     'cv2',
@@ -35,18 +35,18 @@ mock_modules = [
     'sklearn.metrics'
 ]
 
-for mod_name in mock_modules:
-    sys.modules[mod_name] = MagicMock()
+# Create mock objects for the modules
+mock_dict = {mod_name: MagicMock() for mod_name in mock_modules}
 
 # Setup some specific mocks for FastAPI/Pydantic that are used in app.py
-import fastapi
-import fastapi.middleware.cors
-import pydantic
+mock_fastapi = mock_dict['fastapi']
+mock_fastapi_middleware_cors = mock_dict['fastapi.middleware.cors']
+mock_pydantic = mock_dict['pydantic']
 
 class MockBaseModel:
     pass
 
-pydantic.BaseModel = MockBaseModel
+mock_pydantic.BaseModel = MockBaseModel
 
 class TestCORSSecurity(unittest.TestCase):
     def setUp(self):
@@ -54,9 +54,8 @@ class TestCORSSecurity(unittest.TestCase):
         if "CORS_ALLOWED_ORIGINS" in os.environ:
             del os.environ["CORS_ALLOWED_ORIGINS"]
 
-        # Reload the config module to ensure clean state
+        # Import config module
         import gesture_recognition.gui.backend.config as config
-        reload(config)
         self.config_module = config
 
     def test_default_origins(self):
@@ -69,13 +68,16 @@ class TestCORSSecurity(unittest.TestCase):
         ]
         self.assertEqual(self.config_module.config.CORS_ALLOWED_ORIGINS, expected_defaults)
 
+    @patch.dict('sys.modules', mock_dict)
     def test_env_variable_override(self):
         """Test that environment variable correctly overrides default CORS origins."""
         custom_origins = "https://myapp.com,https://api.myapp.com"
         os.environ["CORS_ALLOWED_ORIGINS"] = custom_origins
 
-        # Reload to pick up env var
-        reload(self.config_module)
+        # Import and reload config module under the patched sys.modules
+        import gesture_recognition.gui.backend.config as config
+        reload(config)
+        self.config_module = config
 
         expected_origins = ["https://myapp.com", "https://api.myapp.com"]
         self.assertEqual(self.config_module.config.CORS_ALLOWED_ORIGINS, expected_origins)

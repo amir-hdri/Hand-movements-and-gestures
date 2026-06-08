@@ -14,7 +14,14 @@ _PKG_DIR = Path(__file__).resolve().parent
 if str(_PKG_DIR) not in sys.path:
     sys.path.insert(0, str(_PKG_DIR))
 
-from .pingpongthread import PingPongThread  # noqa: E402
-
-__all__ = ["PingPongThread"]
+# Try to import PingPongThread, but allow it to fail if dependencies are missing
+# This allows the package to be imported for testing even without hardware dependencies
+try:
+    from .pingpongthread import PingPongThread  # noqa: E402
+    __all__ = ["PingPongThread"]
+except ModuleNotFoundError as e:
+    # If serial or other hardware dependencies are missing, we still want to allow
+    # the package to be imported for testing purposes
+    PingPongThread = None
+    __all__ = ["PingPongThread"]
 

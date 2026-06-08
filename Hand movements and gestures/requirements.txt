@@ -16,3 +16,6 @@ scikit-learn
 fastapi
 uvicorn
 python-multipart
+
+# ---- Hardware ----
+pyserial
