@@ -252,8 +252,6 @@ class ServoOperationUtilsProcess():
             if cube_ID_list[i] == 0xFF and len(cube_ID_list) != 1:
                 raise ValueError("If cube ID is all, input must not be length-above-2 list.")
         ServoOperationUtilsCheck().check_same_element(cube_ID_list) # 같은 원소가 있으면 error
-        #if cube_ID_list[0] == 0xFF:
-        #    cube_ID_list = [x for x in range(1, connection_number+1)] # all이면 확장
         return cube_ID_list
     
     ### time 옵션 체크 & 처리
