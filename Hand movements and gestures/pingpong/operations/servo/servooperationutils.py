@@ -285,15 +285,12 @@ class ServoOperationUtilsProcess():
             if not duration_option:
                 servo_duration = [[1]] # 디폴트(default)는 1초로 맞춤.
                 if time_option.lower() == "none":
-                    #if speed_list != [None] or step_list != [None]: # default off
                     if (speed_list != [None] and step_list == [None]) or (speed_list == [None] and step_list != [None]):
                         raise ValueError("In schedule, no-duration, and time-none mode, both speed_list and step_list must be entered.")
                 elif time_option.lower() == "speed":
-                    #if time_list != [None] or speed_list != [None]: # default off
                     if (time_list != [None] and speed_list == [None]) or (time_list == [None] and speed_list != [None]):
                         raise ValueError("In schedule, no-duration, and time-speed mode, both time_list and speed_list must be entered.")
                 elif time_option.lower() == "step":
-                    #if time_list != [None] or step_list != [None]: # default off
                     if (time_list != [None] and step_list == [None]) or (time_list == [None] and step_list != [None]):
                         raise ValueError("In schedule, no-duration, and time-step mode, both time_list and step_list must be entered.")
             else:
