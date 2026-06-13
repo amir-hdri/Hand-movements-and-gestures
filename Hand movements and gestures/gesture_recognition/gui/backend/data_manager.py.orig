@@ -46,7 +46,6 @@ class DataManager:
         self.label_manager = LabelManager(config.DATASET_DIR)
         self.recording = False
         self.current_label: Optional[str] = None
-        self.current_label_index: Optional[int] = None
         self.current_data: List[np.ndarray] = []
         self._lock = threading.Lock()
 
@@ -60,7 +59,6 @@ class DataManager:
                 self.label_manager.add_label(label)
 
             self.current_label = label
-            self.current_label_index = self.label_manager.get_label_index(label)
             self.current_data = []
             self.recording = True
             print(f"Started recording for label: {label}")
@@ -74,7 +72,6 @@ class DataManager:
             label = self.current_label
             data = self.current_data
             self.current_label = None
-            self.current_label_index = None
             self.current_data = []
 
             if not data:
@@ -97,7 +94,8 @@ class DataManager:
                 # Assuming single hand for now (first detected hand)
                 res = landmarks_list[0]
                 fv = hand_landmarks_to_feature_vector(res)
-                self.current_data.append(append_label(fv, self.current_label_index))
+                label_idx = self.label_manager.get_label_index(self.current_label)
+                self.current_data.append(append_label(fv, label_idx))
 
     def _save_data(self, label: str, data: List[np.ndarray]):
         created_time = int(time.time())
@@ -176,7 +174,7 @@ class DataManager:
                 for npy_file in config.DATASET_DIR.glob("*.npy"):
                     npy_file.unlink()
                     print(f"Deleted: {npy_file}")
-                
+
                 # Keep labels.json
                 print("Dataset reset. All data files removed.")
             else:
