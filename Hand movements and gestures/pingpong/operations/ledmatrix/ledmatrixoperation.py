@@ -98,12 +98,3 @@ class LEDMatrixOperation():
         self._write_copy(sending_bytes)
         ### sleep
         time.sleep(0.2) 
-
-    #def LED_matrix_set_display(self):
-    #    pass
-
-    #def LED_matrix_set_brightness(self):
-    #    pass
-
-    #def LED_matrix_set_blinkrate(self):
-    #    pass
