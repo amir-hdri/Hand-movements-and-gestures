@@ -16,23 +16,12 @@ class ModelTrainer:
         self.actions = config.ACTIONS
         self.seq_length = config.SEQ_LENGTH
 
-    def load_data(self):
-        data_list = []
-        labels_list = []
-
-        # Reload actions from config or labels.json if dynamic
-        # Assuming DataManager updates config.ACTIONS or we read from labels.json
-        # For now, let's just scan directory to find actions
-        # But we need consistent label indices.
-        # We should rely on the LabelManager logic.
-
-        # Let's assume we pass the list of actions to train
-        pass
-
     def train(self, actions: list[str], epochs=50):
         print(f"Training on actions: {actions}")
 
-        # Collect data
+        # Collect data.  We only include actions that actually have sequence
+        # files, but we keep the index relative to the *full* actions list so
+        # the model output layer matches the gesture ordering the app uses.
         X_data = []
         Y_data = []
 
@@ -50,24 +39,16 @@ class ModelTrainer:
                 print(f"Loading {f}")
                 try:
                     d = np.load(f)
-                    # The saved seq data includes the label index as the last element of each frame?
-                    # create_dataset.py:
-                    # data.append(append_label(fv, label_index))
-                    # then seq created from data.
-                    # So shape is (N, 30, 100) where 100 = 99 features + 1 label
                     action_data.append(d)
                 except Exception as e:
                     print(f"Error loading {f}: {e}")
 
             if action_data:
                 full_action_data = np.concatenate(action_data, axis=0)
-                # Extract features (exclude label from input)
-                # The label in the file might be different if we re-indexed!
-                # We should IGNORE the saved label index and use the current `idx`.
-
-                # Input: all frames, all features except last
+                # Input: all frames, all features except the trailing label col
                 x = full_action_data[:, :, :-1]
-                # Create label array
+                # We IGNORE the saved label index and use the current `idx` so
+                # the mapping always matches the gestures list in use.
                 y = np.full((len(x),), idx)
 
                 X_data.append(x)
@@ -75,6 +56,13 @@ class ModelTrainer:
 
         if not X_data:
             raise ValueError("No training data found.")
+
+        # At least two classes are required for a meaningful classifier.
+        if len(X_data) < 2:
+            raise ValueError(
+                "At least 2 gestures with recorded data are required for training. "
+                f"Only found data for: {[a for a in actions if any(self.dataset_dir.glob(f'seq_{a}_*.npy'))]}"
+            )
 
         X = np.concatenate(X_data, axis=0).astype(np.float32)
         Y = np.concatenate(Y_data, axis=0).astype(int)

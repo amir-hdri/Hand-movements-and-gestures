@@ -4,7 +4,7 @@ import {
   Paper, Box, Typography, LinearProgress, Fade, IconButton, Tooltip
 } from '@mui/material';
 import {
-  VideocamOff, RecordCircle, WifiOff, Wifi, Fullscreen, FullscreenExit
+  VideocamOff, FiberManualRecord, WifiOff, Wifi, Fullscreen, FullscreenExit
 } from '@mui/icons-material';
 
 function CameraView({ mode, isConnected }) {
@@ -101,7 +101,7 @@ function CameraView({ mode, isConnected }) {
               animate={{ scale: [0.8, 1.2, 0.8] }}
               transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
             >
-              <RecordCircle color="error" fontSize="small" />
+              <FiberManualRecord color="error" fontSize="small" />
             </motion.div>
           )}
           

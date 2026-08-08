@@ -116,6 +116,16 @@ pip install -r requirements.txt
    - The system will automatically download the `hand_landmarker.task` model on first run
    - Alternatively, manually download from [MediaPipe Model Garden](https://developers.google.com/mediapipe/solutions/vision/hand_landmarker)
 
+> **Note on Keras 3 / legacy models:** the repo ships two models — `models/model.h5`
+> (2 classes: `come`, `away`) and `models/model2_1.0.h5` (3 classes: `come`, `away`,
+> `spin`). `model2_1.0.h5` was saved with Keras 2.4 and cannot be loaded directly by
+> Keras 3. If you get an error like `Unrecognized keyword arguments passed to LSTM`,
+> rebuild it once with:
+>
+> ```bash
+> python scripts/convert_legacy_model.py
+> ```
+
 ### Frontend Setup
 
 1. **Navigate to frontend directory**:
@@ -329,8 +339,26 @@ http://localhost:8000/api
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/config` | Get current configuration |
+| GET | `/config` | Get current configuration (seq_length, threshold, stable_count, smart_thresholds) |
 | POST | `/config` | Update configuration |
+
+`GET /api/config` returns:
+
+```json
+{
+  "seq_length": 30,
+  "threshold": 0.9,
+  "stable_count": 3,
+  "smart_thresholds": { "stop": 0.98, "emergency": 0.99 }
+}
+```
+
+`POST /api/config` accepts any subset of these fields and applies them
+immediately (the recognizer is rebuilt so new values take effect):
+
+```json
+{ "seq_length": 40, "threshold": 0.85, "stable_count": 5 }
+```
 
 #### History & Dataset
 

@@ -1,10 +1,19 @@
 # ---- Core runtime ----
+# NumPy is capped at <2.0 because TensorFlow 2.16 (and older OpenCV/mediapipe
+# wheels) are compiled against the NumPy 1.x ABI.
 numpy>=1.26.0,<2.0
-opencv-contrib-python
-mediapipe>=0.10.0
+# opencv-contrib-python >= 5.0 requires NumPy>=2 and libGL; cap it to stay on
+# the NumPy 1.x ABI.  On headless servers install opencv-contrib-python-headless.
+opencv-contrib-python<5
+# mediapipe >= 0.10.14 pulls in jax which requires NumPy>=2.  Cap it so the
+# project's pinned NumPy<2 constraint stays satisfiable.
+mediapipe>=0.10.9,<0.10.14
 attrs
+python-dotenv
 
 # ---- TensorFlow / Keras ----
+# model2_1.0.h5 was saved with Keras 2.4; see scripts/convert_legacy_model.py
+# to rebuild it for Keras 3 (run before loading that model on Keras 3).
 tensorflow
 keras
 

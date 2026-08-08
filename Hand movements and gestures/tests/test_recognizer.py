@@ -107,6 +107,43 @@ class RecognizerTest(unittest.TestCase):
 
         self.assertIn("Unexpected model output shape", str(context.exception))
 
+    def test_low_confidence_resets_stability_run(self):
+        """A below-threshold frame must break a run of 'stable' predictions."""
+        feature_vector = np.zeros(99, dtype=np.float32)
+        seq = self.seq_length  # 5
+        stable = self.stable_count  # 3
+
+        # Feed 4 frames (no prediction yet)
+        for _ in range(seq - 1):
+            self.recognizer.update(feature_vector)
+
+        above = np.array([[0.1, 0.9, 0.0]], dtype=np.float32)   # action2 (0.9)
+        below = np.array([[0.5, 0.5, 0.0]], dtype=np.float32)   # max 0.5 < 0.8
+        self.recognizer._model = MagicMock(return_value=above)
+
+        # 2 above-threshold action2 predictions
+        self.recognizer.update(feature_vector)  # action_seq=[action2]
+        self.recognizer.update(feature_vector)  # action_seq=[action2, action2]
+
+        # One below-threshold frame resets the run.
+        self.recognizer._model = MagicMock(return_value=below)
+        pred = self.recognizer.update(feature_vector)
+        self.assertIsNone(pred.raw_action)
+        self.assertIsNone(pred.stable_action)
+        self.assertEqual(len(self.recognizer._action_seq), 0)
+
+        # A single following action2 must NOT become stable (run was broken).
+        self.recognizer._model = MagicMock(return_value=above)
+        pred = self.recognizer.update(feature_vector)
+        self.assertEqual(pred.raw_action, "action2")
+        self.assertIsNone(pred.stable_action)
+        self.assertEqual(len(self.recognizer._action_seq), 1)
+
+        # But two more consecutive action2 predictions reach stable_count again.
+        pred = self.recognizer.update(feature_vector)
+        pred = self.recognizer.update(feature_vector)
+        self.assertEqual(pred.stable_action, "action2")
+
     def test_update_typeerror_fallback_verbose(self):
         feature_vector = np.zeros(99, dtype=np.float32)
 

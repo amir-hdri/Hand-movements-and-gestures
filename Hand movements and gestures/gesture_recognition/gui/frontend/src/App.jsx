@@ -108,12 +108,16 @@ function App({ themeMode, onToggleTheme }) {
     }
   }, [isConnected, pollStatus]);
 
-  // Handle prediction updates
+  // Handle prediction updates.  status is polled every second and produces a
+  // fresh last_prediction object each time, so we track the last *action* seen
+  // to avoid adding duplicate history entries for an unchanged gesture.
+  const lastHistoryAction = React.useRef(null);
   useEffect(() => {
-    if (status.last_prediction?.action) {
-      // Update history
+    const action = status.last_prediction?.action;
+    if (action && action !== lastHistoryAction.current) {
+      lastHistoryAction.current = action;
       const newEntry = {
-        action: status.last_prediction.action,
+        action,
         confidence: status.last_prediction.confidence,
         timestamp: new Date().toISOString()
       };
