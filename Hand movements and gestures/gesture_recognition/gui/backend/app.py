@@ -6,8 +6,8 @@ from typing import Dict, List, Optional
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
-from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -47,16 +47,31 @@ class AppState:
         self.prediction_history = []
         self.history_lock = threading.Lock()
         self.lock = threading.Lock()
+        # Tracks the most recently recorded history action so we do not flood
+        # the history with one entry per camera frame for the same gesture.
+        self.last_history_action = None
+        self.last_history_confidence = 0.0
 
         # Load model initially
         self.reload_model()
 
     def add_prediction_to_history(self, action, confidence):
-        """Add a prediction to the history, keeping only the last 100 entries"""
+        """Add a prediction to the history, keeping only the last 100 entries.
+
+        Consecutive identical predictions are collapsed into a single entry so
+        the history does not get spammed at the camera frame rate.
+        """
+        if action is None:
+            return
         with self.history_lock:
+            # Skip duplicate consecutive entries for the same action.
+            if self.last_history_action == action:
+                return
+            self.last_history_action = action
+            self.last_history_confidence = float(confidence)
             self.prediction_history.append({
                 "action": action,
-                "confidence": confidence,
+                "confidence": float(confidence),
                 "timestamp": datetime.now().isoformat()
             })
             # Keep only last 100 predictions
@@ -72,6 +87,8 @@ class AppState:
         """Clear the prediction history"""
         with self.history_lock:
             self.prediction_history = []
+            self.last_history_action = None
+            self.last_history_confidence = 0.0
 
     def reload_model(self):
         actions = self.data_manager.get_available_gestures()
@@ -83,30 +100,21 @@ class AppState:
 
 state = AppState()
 
-# Drawing Helper
-mp_drawing = mp.solutions.drawing_utils
-mp_hands = mp.solutions.hands # Still exists for constants like HAND_CONNECTIONS?
-# Wait, if `solutions` is missing, I cannot use `mp.solutions.drawing_utils`.
-# I should check if `mp.solutions` works now.
-# But I am using tasks API for inference.
-# `mp.solutions` might work for drawing utils if I install correct package?
-# But if it failed before, it will fail here.
-# I will implement custom drawing or try to import it safely.
-
+# Drawing helper: MediaPipe `solutions` provides drawing_utils + HAND_CONNECTIONS.
+# It is optional — if unavailable, landmark overlay drawing is simply skipped.
 try:
-    from mediapipe.python.solutions import drawing_utils as mp_drawing
-    from mediapipe.python.solutions import hands as mp_hands
-except ImportError:
-    try:
-        mp_drawing = mp.solutions.drawing_utils
-        mp_hands = mp.solutions.hands
-    except ImportError:
-        print("Warning: MediaPipe solutions not found. Drawing will be disabled.")
-        mp_drawing = None
-        mp_hands = None
+    mp_drawing = mp.solutions.drawing_utils
+    mp_hands = mp.solutions.hands
+    if mp_drawing is None or mp_hands is None:
+        raise AttributeError
+except (ImportError, AttributeError):
+    print("Warning: MediaPipe solutions not found. Landmark drawing will be disabled.")
+    mp_drawing = None
+    mp_hands = None
+
 
 def draw_landmarks_on_image(rgb_image, detection_result):
-    if not mp_drawing:
+    if not mp_drawing or not mp_hands:
         return np.copy(rgb_image)
 
     hand_landmarks_list = detection_result.hand_landmarks
@@ -125,7 +133,7 @@ def draw_landmarks_on_image(rgb_image, detection_result):
         mp_drawing.draw_landmarks(
             image=annotated_image,
             landmark_list=hand_landmarks_proto,
-            connections=mp_hands.HAND_CONNECTIONS if mp_hands else None,
+            connections=mp_hands.HAND_CONNECTIONS,
             landmark_drawing_spec=mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
             connection_drawing_spec=mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=2, circle_radius=2))
     return annotated_image
@@ -136,16 +144,27 @@ class CameraThread(threading.Thread):
         super().__init__()
         self.running = True
         self.cap = cv2.VideoCapture(0)
+        self.detector = None
 
-        # Initialize HandLandmarker
-        base_options = python.BaseOptions(model_asset_path=str(config.MODELS_DIR / "hand_landmarker.task"))
-        options = vision.HandLandmarkerOptions(
-            base_options=base_options,
-            num_hands=1,
-            min_hand_detection_confidence=0.5,
-            min_hand_presence_confidence=0.5,
-            min_tracking_confidence=0.5)
-        self.detector = vision.HandLandmarker.create_from_options(options)
+        # Initialize HandLandmarker (only if the model asset is available, so a
+        # missing download does not crash the whole backend at import time).
+        model_asset = config.MODELS_DIR / "hand_landmarker.task"
+        if not model_asset.exists():
+            print(f"Warning: HandLandmarker model not found at {model_asset}. "
+                  "Camera detection will be disabled until the model is available.")
+        else:
+            try:
+                base_options = python.BaseOptions(model_asset_path=str(model_asset))
+                options = vision.HandLandmarkerOptions(
+                    base_options=base_options,
+                    num_hands=1,
+                    min_hand_detection_confidence=0.5,
+                    min_hand_presence_confidence=0.5,
+                    min_tracking_confidence=0.5)
+                self.detector = vision.HandLandmarker.create_from_options(options)
+            except Exception as e:  # pragma: no cover - hardware/GL dependent
+                print(f"Warning: Failed to initialise HandLandmarker: {e}. "
+                      "Camera detection will be disabled.")
 
     def run(self):
         while self.running:
@@ -162,6 +181,16 @@ class CameraThread(threading.Thread):
             frame = cv2.flip(frame, 1)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
+            if self.detector is None:
+                # No detector available: still stream the raw frame so the UI
+                # shows something, and do not spin the CPU on detection.
+                ret, buffer = cv2.imencode('.jpg', frame)
+                if ret:
+                    with state.lock:
+                        state.latest_frame = buffer.tobytes()
+                time.sleep(0.05)
+                continue
+
             # Create MediaPipe Image
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
@@ -174,8 +203,8 @@ class CameraThread(threading.Thread):
             # Logic
             if detection_result.hand_landmarks:
                 if state.mode == "recording":
-                        state.data_manager.process_frame(rgb_frame, detection_result.hand_landmarks)
-                        cv2.putText(annotated_frame, "RECORDING", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    state.data_manager.process_frame(detection_result.hand_landmarks)
+                    cv2.putText(annotated_frame, "RECORDING", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
                 if state.mode != "training" and state.inference_engine.model:
                     # Assuming single hand
@@ -190,12 +219,11 @@ class CameraThread(threading.Thread):
                             label_text = f"STABLE: {pred.stable_action}"
                             color = (255, 0, 0)
                             state.last_prediction = {"action": pred.stable_action, "confidence": pred.confidence}
-                            # Add to history
+                            # Only add stable actions to history; duplicates are
+                            # collapsed inside add_prediction_to_history.
                             state.add_prediction_to_history(pred.stable_action, pred.confidence)
                         else:
                             state.last_prediction = {"action": pred.raw_action, "confidence": pred.confidence}
-                            # Add to history
-                            state.add_prediction_to_history(pred.raw_action, pred.confidence)
 
                         cv2.putText(annotated_frame, label_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
                     else:
@@ -235,8 +263,11 @@ async def generate_frames():
 class RecordRequest(BaseModel):
     label: str
 
-class ThresholdConfig(BaseModel):
-    thresholds: Dict[str, float]
+class ConfigUpdateRequest(BaseModel):
+    seq_length: Optional[int] = None
+    threshold: Optional[float] = None
+    stable_count: Optional[int] = None
+    smart_thresholds: Optional[Dict[str, float]] = None
 
 class AddGestureRequest(BaseModel):
     label: str
@@ -308,7 +339,10 @@ async def get_gestures():
 
 @app.post("/api/gestures")
 async def add_gesture(req: AddGestureRequest):
-    state.data_manager.add_gesture(req.label)
+    try:
+        state.data_manager.add_gesture(req.label)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return {"status": "added", "label": req.label}
 
 @app.delete("/api/gestures")
@@ -351,13 +385,48 @@ async def reset_dataset():
 
 @app.get("/api/config")
 async def get_config():
-    return {"smart_thresholds": config.SMART_THRESHOLDS}
+    # Report the sequence length actually in use (derived from the loaded model
+    # when available) so the UI reflects the real value, not just config.
+    seq_length = config.SEQ_LENGTH
+    recognizer = getattr(state.inference_engine, "recognizer", None)
+    if recognizer is not None:
+        seq_length = recognizer.seq_length
+    return {
+        "seq_length": seq_length,
+        "threshold": config.DEFAULT_THRESHOLD,
+        "stable_count": config.STABLE_COUNT,
+        "smart_thresholds": config.SMART_THRESHOLDS,
+    }
 
 @app.post("/api/config")
-async def update_config(req: ThresholdConfig):
-    config.SMART_THRESHOLDS.update(req.thresholds)
+async def update_config(req: ConfigUpdateRequest):
+    if req.seq_length is not None:
+        if req.seq_length <= 0:
+            raise HTTPException(status_code=400, detail="seq_length must be > 0")
+        config.SEQ_LENGTH = int(req.seq_length)
+    if req.threshold is not None:
+        if not 0.0 < req.threshold <= 1.0:
+            raise HTTPException(status_code=400, detail="threshold must be in (0, 1]")
+        config.DEFAULT_THRESHOLD = float(req.threshold)
+    if req.stable_count is not None:
+        if req.stable_count <= 0:
+            raise HTTPException(status_code=400, detail="stable_count must be > 0")
+        config.STABLE_COUNT = int(req.stable_count)
+    if req.smart_thresholds is not None:
+        config.SMART_THRESHOLDS.update(req.smart_thresholds)
+
+    # Rebuild the recognizer so the new sequence length / threshold / stable
+    # count take effect, then push updated smart thresholds.
+    state.reload_model()
     state.inference_engine.update_thresholds(config.SMART_THRESHOLDS)
-    return {"status": "updated", "smart_thresholds": config.SMART_THRESHOLDS}
+
+    return {
+        "status": "updated",
+        "seq_length": config.SEQ_LENGTH,
+        "threshold": config.DEFAULT_THRESHOLD,
+        "stable_count": config.STABLE_COUNT,
+        "smart_thresholds": config.SMART_THRESHOLDS,
+    }
 
 # Serve Frontend
 frontend_path = Path(__file__).resolve().parent.parent / "frontend" / "dist"

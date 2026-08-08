@@ -95,7 +95,21 @@ def main() -> int:
     try:
         model = tf.keras.models.load_model(args.model, compile=False)
     except Exception as e:
-        raise SystemExit(f"Failed to load model: {e}")
+        raise SystemExit(
+            f"Failed to load model: {e}. If this is a legacy (Keras 2.4) model, "
+            "run scripts/convert_legacy_model.py to rebuild it for Keras 3 first."
+        )
+
+    # Validate the model output matches the configured action list.
+    try:
+        n_classes = int(model.output_shape[-1])
+    except (TypeError, ValueError, AttributeError) as e:
+        raise SystemExit(f"Could not determine model output size: {e}")
+    if n_classes != len(args.actions):
+        raise SystemExit(
+            f"Model outputs {n_classes} classes but {len(args.actions)} actions were "
+            f"provided ({args.actions}). Use --actions to match the model output."
+        )
 
     recognizer = GestureRecognizer(
         model,

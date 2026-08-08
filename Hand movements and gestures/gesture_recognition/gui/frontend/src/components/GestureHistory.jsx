@@ -5,7 +5,6 @@ import {
   Chip, Divider, IconButton, Tooltip
 } from '@mui/material';
 import { History as HistoryIcon, Delete, CheckCircle, Cancel } from '@mui/icons-material';
-import { format } from 'date-fns';
 
 function GestureHistory({ history }) {
   const getConfidenceColor = (confidence) => {
@@ -15,10 +14,12 @@ function GestureHistory({ history }) {
     return 'error';
   };
 
+  // Native formatting (no external date-fns dependency required).
   const formatTime = (isoString) => {
     try {
       const date = new Date(isoString);
-      return format(date, 'HH:mm:ss');
+      if (Number.isNaN(date.getTime())) return 'N/A';
+      return date.toLocaleTimeString([], { hour12: false });
     } catch {
       return 'N/A';
     }

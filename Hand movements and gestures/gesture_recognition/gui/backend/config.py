@@ -5,6 +5,37 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Dict
 
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+# Optionally load a .env file next to this module (the README documents it).
+# python-dotenv is a soft dependency; config still works without it.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except ImportError:  # pragma: no cover - dotenv is optional
+    pass
+
+
 @dataclass
 class GestureConfig:
     # Project paths
@@ -13,15 +44,15 @@ class GestureConfig:
     MODELS_DIR: Path = PROJECT_ROOT / "models"
 
     # Data collection settings
-    SEQ_LENGTH: int = 30
-    SECS_FOR_ACTION: int = 30
+    SEQ_LENGTH: int = _env_int("SEQ_LENGTH", 30)
+    SECS_FOR_ACTION: int = _env_int("SECS_FOR_ACTION", 30)
 
     # Model settings
     MODEL_NAME: str = "model.h5"
 
     # Inference settings
-    DEFAULT_THRESHOLD: float = 0.9
-    STABLE_COUNT: int = 3
+    DEFAULT_THRESHOLD: float = _env_float("CONFIDENCE_THRESHOLD", 0.9)
+    STABLE_COUNT: int = _env_int("STABLE_COUNT", 3)
 
     # Smart Thresholding: specific thresholds for critical actions
     SMART_THRESHOLDS: Dict[str, float] = field(default_factory=lambda: {

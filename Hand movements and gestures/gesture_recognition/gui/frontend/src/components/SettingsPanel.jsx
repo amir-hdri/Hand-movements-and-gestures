@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Paper, Typography, Box, Divider, Switch, FormControlLabel,
-  TextField, Button, Chip, Grid, Slider, Tooltip
+  Paper, Typography, Box, Divider,
+  Button, Chip, Grid, Slider, Tooltip, CircularProgress
 } from '@mui/material';
 import { Settings, Save, Tune, Info, HelpOutline } from '@mui/icons-material';
+import { useSnackbar } from 'notistack';
+import { updateConfig } from '../api';
 
 function SettingsPanel({ config, gestures, onConfigUpdate }) {
+  const { enqueueSnackbar } = useSnackbar();
   const [localConfig, setLocalConfig] = useState({
     seq_length: config.seq_length || 30,
     threshold: config.threshold || 0.9,
     stable_count: config.stable_count || 3
   });
   const [expanded, setExpanded] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -29,8 +33,28 @@ function SettingsPanel({ config, gestures, onConfigUpdate }) {
     }));
   };
 
-  const handleSave = () => {
-    onConfigUpdate(localConfig);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Persist to the backend (sequence length / threshold / stable count).
+      const updated = await updateConfig({
+        seq_length: localConfig.seq_length,
+        threshold: localConfig.threshold,
+        stable_count: localConfig.stable_count
+      });
+      // Reflect the authoritative values returned by the server.
+      setLocalConfig({
+        seq_length: updated.seq_length ?? localConfig.seq_length,
+        threshold: updated.threshold ?? localConfig.threshold,
+        stable_count: updated.stable_count ?? localConfig.stable_count
+      });
+      if (onConfigUpdate) onConfigUpdate(updated);
+      enqueueSnackbar('Settings saved', { variant: 'success' });
+    } catch (e) {
+      enqueueSnackbar('Failed to save settings: ' + e.message, { variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleReset = () => {
@@ -175,13 +199,9 @@ function SettingsPanel({ config, gestures, onConfigUpdate }) {
               variant="contained"
               color="success"
               onClick={handleSave}
-              startIcon={<Save />}
+              startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <Save />}
               fullWidth
-              disabled={
-                localConfig.seq_length === 30 &&
-                localConfig.threshold === 0.9 &&
-                localConfig.stable_count === 3
-              }
+              disabled={saving}
             >
               Save Settings
             </Button>

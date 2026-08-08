@@ -4,9 +4,6 @@ from pathlib import Path
 from typing import List, Dict, Optional
 import numpy as np
 import threading
-import mediapipe as mp
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
 
 from gesture_recognition.features import append_label, hand_landmarks_to_feature_vector
 from .config import config
@@ -32,6 +29,11 @@ class LabelManager:
         return self.labels
 
     def add_label(self, label: str):
+        label = label.strip()
+        if not label:
+            raise ValueError("Gesture label cannot be empty")
+        if any(ch in label for ch in "/\\"):
+            raise ValueError("Gesture label cannot contain path separators")
         if label not in self.labels:
             self.labels.append(label)
             self.save_labels()
@@ -81,7 +83,7 @@ class DataManager:
             self._save_data(label, data)
             print(f"Stopped recording. Saved {len(data)} frames.")
 
-    def process_frame(self, frame_rgb, landmarks_list):
+    def process_frame(self, landmarks_list):
         """
         Called by the video stream loop when recording is active.
         landmarks_list: List[List[NormalizedLandmark]] from HandLandmarker
@@ -131,10 +133,11 @@ class DataManager:
                 self.label_manager.labels.remove(label)
                 self.label_manager.save_labels()
 
-            # Remove data files for this label
-            import re
-            for npy_file in config.DATASET_DIR.glob("*.npy"):
-                if label in str(npy_file):
+            # Remove data files for this label.  Match on the exact file prefix
+            # (raw_<label>_*.npy / seq_<label>_*.npy) so a label that is a
+            # substring of another label cannot delete that label's data.
+            for prefix in (f"raw_{label}_", f"seq_{label}_"):
+                for npy_file in config.DATASET_DIR.glob(f"{prefix}*.npy"):
                     npy_file.unlink()
                     print(f"Deleted data file: {npy_file}")
 

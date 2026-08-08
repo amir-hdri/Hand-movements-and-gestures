@@ -1,3 +1,18 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Python virtual environments
+.venv/
+venv/
+
+# Frontend build artifacts
+node_modules/
+dist/
+
+# Local secrets / config
+.env
+
+# Script-generated outputs
+artifacts/
+dataset_export_*.zip

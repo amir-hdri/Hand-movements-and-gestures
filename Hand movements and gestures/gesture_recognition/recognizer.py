@@ -81,6 +81,10 @@ class GestureRecognizer:
         i_pred = int(np.argmax(y_pred))
         conf = float(y_pred[i_pred])
         if conf < self._threshold:
+            # Below-threshold predictions break any ongoing run of "stable"
+            # predictions, otherwise a gap would let two separated detections
+            # of the same action still count as consecutive.
+            self._action_seq.clear()
             return Prediction(raw_action=None, confidence=conf, stable_action=None)
 
         raw_action = self._actions[i_pred]
